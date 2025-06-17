@@ -433,20 +433,30 @@ namespace CS2RankingPlugin
         private void UpdateCosmetics(CCSPlayerController player, PlayerData data)
         {
             data.ScoreboardTag = $"[P{data.Prestige} L{data.Level}]";
-            data.ChatColor = data.Prestige switch
+            
+            // Set chat color based on level and prestige
+            if (data.Level >= 55)
             {
-                0 => "White",
-                1 => "Green",
-                2 => "Blue",
-                3 => "Purple",
-                4 => "Gold",
-                5 => "Red",
-                6 => "Orange",
-                7 => "Pink",
-                8 => "Cyan",
-                9 => "Magenta",
-                _ => "Rainbow"
-            };
+                data.ChatColor = "Red";
+            }
+            else
+            {
+                data.ChatColor = data.Prestige switch
+                {
+                    0 => "White",
+                    1 => "Green",
+                    2 => "Blue",
+                    3 => "Purple",
+                    4 => "Gold",
+                    5 => "Red",
+                    6 => "Orange",
+                    7 => "Pink",
+                    8 => "Cyan",
+                    9 => "Magenta",
+                    _ => "Rainbow"
+                };
+            }
+            
             player.PrintToChat($"Cosmetics updated: {data.ScoreboardTag} with {data.ChatColor} chat color.");
             ApplyPrestigeIcon(player, data.Prestige);
         }
