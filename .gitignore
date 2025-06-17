@@ -72,4 +72,20 @@ $RECYCLE.BIN/
 .vscode/
 
 # macOS
-.DS_Store 
+.DS_Store
+
+# Ignore config files with sensitive information
+addons/cs2-ranking/config.json
+
+# Ignore build outputs
+bin/
+obj/
+
+# Ignore IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb 

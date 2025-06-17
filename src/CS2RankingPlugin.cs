@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CS2RankingPlugin
 {
@@ -18,7 +20,8 @@ namespace CS2RankingPlugin
         public override string ModuleAuthor => "Your Name";
         public override string ModuleDescription => "A vanity-driven ranking system with in-game cosmetic rewards.";
 
-        private string _connectionString;
+        private const string ConfigPath = "addons/cs2-ranking/config.json";
+        private string ConnectionString;
         private Dictionary<ulong, PlayerData> _playerData;
         private int _killXp = 10;
         private int _roundWinXp = 5;
@@ -26,7 +29,10 @@ namespace CS2RankingPlugin
 
         public override void Load(bool hotReload)
         {
-            _connectionString = "Server=rkb.site.nfoservers.com;Port=3306;Database=rkb_vanity;User=rkb;Password=dD7xPpfyfd;";
+            // Load configuration
+            var config = LoadConfig();
+            ConnectionString = $"Server={config.DatabaseHost};Port={config.DatabasePort};Database={config.DatabaseName};User={config.DatabaseUser};Password={config.DatabasePassword};";
+            
             _playerData = new Dictionary<ulong, PlayerData>();
 
             // Register commands
@@ -63,7 +69,7 @@ namespace CS2RankingPlugin
 
         private void InitializeDatabase()
         {
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(ConnectionString))
             {
                 connection.Open();
                 var command = new MySqlCommand(@"
@@ -98,7 +104,7 @@ namespace CS2RankingPlugin
         {
             if (player == null) return;
 
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(ConnectionString))
             {
                 connection.Open();
                 var command = new MySqlCommand(@"
@@ -616,7 +622,7 @@ namespace CS2RankingPlugin
 
         private void UpdatePlayerData(ulong steamId, PlayerData data)
         {
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(ConnectionString))
             {
                 connection.Open();
                 var command = new MySqlCommand(@"
@@ -657,7 +663,7 @@ namespace CS2RankingPlugin
         private void LoadPlayerData(CCSPlayerController player)
         {
             var steamId = player.SteamID;
-            using (var connection = new MySqlConnection(_connectionString))
+            using (var connection = new MySqlConnection(ConnectionString))
             {
                 connection.Open();
                 var command = new MySqlCommand("SELECT xp, level, prestige, scoreboard_tag, chat_color FROM players WHERE steam_id = @steamId", connection);
@@ -694,6 +700,38 @@ namespace CS2RankingPlugin
                 UpdatePlayerData(steamId, data);
                 _playerData.Remove(steamId);
             }
+        }
+
+        private Config LoadConfig()
+        {
+            var configPath = Path.Combine(Server.GameDirectory, ConfigPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(configPath));
+
+            if (!File.Exists(configPath))
+            {
+                var defaultConfig = new Config
+                {
+                    DatabaseHost = "rkb.site.nfoservers.com",
+                    DatabasePort = 3306,
+                    DatabaseName = "rkb_vanity",
+                    DatabaseUser = "rkb",
+                    DatabasePassword = "YOUR_PASSWORD_HERE"
+                };
+
+                File.WriteAllText(configPath, JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions { WriteIndented = true }));
+                return defaultConfig;
+            }
+
+            return JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath));
+        }
+
+        private class Config
+        {
+            public string DatabaseHost { get; set; }
+            public int DatabasePort { get; set; }
+            public string DatabaseName { get; set; }
+            public string DatabaseUser { get; set; }
+            public string DatabasePassword { get; set; }
         }
     }
 
