@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace CS2RankingPlugin
 {
@@ -24,22 +25,32 @@ namespace CS2RankingPlugin
         private int _roundWinXp = 5;
         private int _levelUpXpMultiplier = 100;
         private Config _config;
+        private MySqlConnection _connection;
+        private bool _isEnabled = true;
+        private const int MaxRetries = 3;
+        private const int RetryDelayMs = 1000;
 
         public override void Load(bool hotReload)
         {
-            _config = LoadConfig();
-            ConnectionString = $"Server={_config.DatabaseHost};Port={_config.DatabasePort};Database={_config.DatabaseName};User={_config.DatabaseUser};Password={_config.DatabasePassword};";
-            _playerData = new Dictionary<ulong, PlayerData>();
-            InitializeDatabase();
+            try
+            {
+                _config = LoadConfig();
+                ConnectionString = $"Server={_config.DatabaseHost};Port={_config.DatabasePort};Database={_config.DatabaseName};User={_config.DatabaseUser};Password={_config.DatabasePassword};Pooling=true;Min Pool Size=5;Max Pool Size=100;Connection Timeout=30;";
+                _playerData = new Dictionary<ulong, PlayerData>();
+                
+                InitializeDatabase();
+                RegisterEventHandlers();
+                RegisterCommands();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CS2RankingPlugin] Error during plugin load: {ex.Message}");
+                throw;
+            }
+        }
 
-            CommandManager.AddCommand("rank", CommandRank, "Display player rank");
-            CommandManager.AddCommand("top", CommandTop, "Display top players");
-            CommandManager.AddCommand("prestige", CommandPrestige, "Prestige player");
-            CommandManager.AddCommand("stats", CommandStats, "Display player statistics");
-            CommandManager.AddCommand("css_lr_giveexp", CommandGiveExp, "Give XP to a player", CommandFlags.AdminOnly);
-            CommandManager.AddCommand("css_lr_takeexp", CommandTakeExp, "Take XP from a player", CommandFlags.AdminOnly);
-            CommandManager.AddCommand("css_lr_enabled", CommandToggleEnabled, "Toggle ranking system", CommandFlags.AdminOnly);
-
+        private void RegisterEventHandlers()
+        {
             RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
             RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
             RegisterEventHandler<EventPlayerConnect>(OnPlayerConnect);
@@ -51,21 +62,59 @@ namespace CS2RankingPlugin
             RegisterEventHandler<EventBombPickup>(OnBombPickup);
         }
 
+        private void RegisterCommands()
+        {
+            CommandManager.AddCommand("rank", CommandRank, "Display player rank");
+            CommandManager.AddCommand("top", CommandTop, "Display top players");
+            CommandManager.AddCommand("prestige", CommandPrestige, "Prestige player");
+            CommandManager.AddCommand("stats", CommandStats, "Display player statistics");
+            CommandManager.AddCommand("css_lr_giveexp", CommandGiveExp, "Give XP to a player", CommandFlags.AdminOnly);
+            CommandManager.AddCommand("css_lr_takeexp", CommandTakeExp, "Take XP from a player", CommandFlags.AdminOnly);
+            CommandManager.AddCommand("css_lr_enabled", CommandToggleEnabled, "Toggle ranking system", CommandFlags.AdminOnly);
+        }
+
         private void InitializeDatabase()
         {
-            using (var connection = new MySqlConnection(ConnectionString))
+            try
             {
-                connection.Open();
-                var command = new MySqlCommand(@"
-                    CREATE TABLE IF NOT EXISTS players (
-                        steam_id BIGINT PRIMARY KEY,
-                        xp INT DEFAULT 0,
-                        level INT DEFAULT 1,
-                        prestige INT DEFAULT 0,
-                        scoreboard_tag VARCHAR(50),
-                        chat_color VARCHAR(20)
-                    )", connection);
-                command.ExecuteNonQuery();
+                using (var connection = new MySqlConnection(ConnectionString))
+                {
+                    connection.Open();
+                    var command = new MySqlCommand(@"
+                        CREATE TABLE IF NOT EXISTS players (
+                            steam_id BIGINT PRIMARY KEY,
+                            xp INT DEFAULT 0,
+                            level INT DEFAULT 1,
+                            prestige INT DEFAULT 0,
+                            scoreboard_tag VARCHAR(50) DEFAULT 'Rookie',
+                            chat_color VARCHAR(50) DEFAULT 'White',
+                            total_kills INT DEFAULT 0,
+                            total_deaths INT DEFAULT 0,
+                            total_assists INT DEFAULT 0,
+                            total_rounds_won INT DEFAULT 0,
+                            total_rounds_lost INT DEFAULT 0,
+                            total_mvps INT DEFAULT 0,
+                            total_bombs_planted INT DEFAULT 0,
+                            total_bombs_defused INT DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                        )", connection);
+                    command.ExecuteNonQuery();
+
+                    // Create indexes for better performance
+                    command.CommandText = @"
+                        CREATE INDEX IF NOT EXISTS idx_level ON players(level);
+                        CREATE INDEX IF NOT EXISTS idx_prestige ON players(prestige);
+                        CREATE INDEX IF NOT EXISTS idx_xp ON players(xp);
+                        CREATE INDEX IF NOT EXISTS idx_last_seen ON players(last_seen);";
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CS2RankingPlugin] Error initializing database: {ex.Message}");
+                throw;
             }
         }
 
@@ -468,21 +517,64 @@ namespace CS2RankingPlugin
 
         private void UpdatePlayerData(ulong steamId, PlayerData data)
         {
-            using (var connection = new MySqlConnection(ConnectionString))
+            try
             {
-                connection.Open();
-                var command = new MySqlCommand(@"
-                    INSERT INTO players (steam_id, xp, level, prestige, scoreboard_tag, chat_color)
-                    VALUES (@steamId, @xp, @level, @prestige, @scoreboardTag, @chatColor)
-                    ON DUPLICATE KEY UPDATE
-                    xp = @xp, level = @level, prestige = @prestige, scoreboard_tag = @scoreboardTag, chat_color = @chatColor", connection);
-                command.Parameters.AddWithValue("@steamId", steamId);
-                command.Parameters.AddWithValue("@xp", data.XP);
-                command.Parameters.AddWithValue("@level", data.Level);
-                command.Parameters.AddWithValue("@prestige", data.Prestige);
-                command.Parameters.AddWithValue("@scoreboardTag", data.ScoreboardTag);
-                command.Parameters.AddWithValue("@chatColor", data.ChatColor);
-                command.ExecuteNonQuery();
+                using (var connection = new MySqlConnection(ConnectionString))
+                {
+                    connection.Open();
+                    var command = new MySqlCommand(@"
+                        INSERT INTO players (
+                            steam_id, xp, level, prestige, scoreboard_tag, chat_color,
+                            total_kills, total_deaths, total_assists,
+                            total_rounds_won, total_rounds_lost, total_mvps,
+                            total_bombs_planted, total_bombs_defused,
+                            last_seen
+                        )
+                        VALUES (
+                            @steamId, @xp, @level, @prestige, @scoreboardTag, @chatColor,
+                            @totalKills, @totalDeaths, @totalAssists,
+                            @totalRoundsWon, @totalRoundsLost, @totalMvps,
+                            @totalBombsPlanted, @totalBombsDefused,
+                            CURRENT_TIMESTAMP
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            xp = @xp,
+                            level = @level,
+                            prestige = @prestige,
+                            scoreboard_tag = @scoreboardTag,
+                            chat_color = @chatColor,
+                            total_kills = @totalKills,
+                            total_deaths = @totalDeaths,
+                            total_assists = @totalAssists,
+                            total_rounds_won = @totalRoundsWon,
+                            total_rounds_lost = @totalRoundsLost,
+                            total_mvps = @totalMvps,
+                            total_bombs_planted = @totalBombsPlanted,
+                            total_bombs_defused = @totalBombsDefused,
+                            last_seen = CURRENT_TIMESTAMP", connection);
+
+                    command.Parameters.AddWithValue("@steamId", steamId);
+                    command.Parameters.AddWithValue("@xp", data.XP);
+                    command.Parameters.AddWithValue("@level", data.Level);
+                    command.Parameters.AddWithValue("@prestige", data.Prestige);
+                    command.Parameters.AddWithValue("@scoreboardTag", data.ScoreboardTag);
+                    command.Parameters.AddWithValue("@chatColor", data.ChatColor);
+                    command.Parameters.AddWithValue("@totalKills", data.TotalKills);
+                    command.Parameters.AddWithValue("@totalDeaths", data.TotalDeaths);
+                    command.Parameters.AddWithValue("@totalAssists", data.TotalAssists);
+                    command.Parameters.AddWithValue("@totalRoundsWon", data.TotalRoundsWon);
+                    command.Parameters.AddWithValue("@totalRoundsLost", data.TotalRoundsLost);
+                    command.Parameters.AddWithValue("@totalMvps", data.TotalMvps);
+                    command.Parameters.AddWithValue("@totalBombsPlanted", data.TotalBombsPlanted);
+                    command.Parameters.AddWithValue("@totalBombsDefused", data.TotalBombsDefused);
+
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CS2RankingPlugin] Error updating player data: {ex.Message}");
+                throw;
             }
         }
 
@@ -526,6 +618,56 @@ namespace CS2RankingPlugin
                 UpdatePlayerData(steamId, data);
                 _playerData.Remove(steamId);
             }
+        }
+
+        private HookResult OnPlayerConnect(EventPlayerConnect @event, GameEventInfo info)
+        {
+            if (@event.Userid == null || !@event.Userid.IsValid) return HookResult.Continue;
+            
+            try
+            {
+                LoadPlayerData(@event.Userid);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CS2RankingPlugin] Error loading player data for {@event.Userid.PlayerName}: {ex.Message}");
+            }
+            
+            return HookResult.Continue;
+        }
+
+        private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+        {
+            if (@event.Userid == null || !@event.Userid.IsValid) return HookResult.Continue;
+            
+            try
+            {
+                SavePlayerData(@event.Userid);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CS2RankingPlugin] Error saving player data for {@event.Userid.PlayerName}: {ex.Message}");
+            }
+            
+            return HookResult.Continue;
+        }
+
+        private async Task<bool> ExecuteWithRetryAsync(Func<Task> action)
+        {
+            for (int i = 0; i < MaxRetries; i++)
+            {
+                try
+                {
+                    await action();
+                    return true;
+                }
+                catch (MySqlException ex)
+                {
+                    if (i == MaxRetries - 1) throw;
+                    await Task.Delay(RetryDelayMs * (i + 1));
+                }
+            }
+            return false;
         }
 
         private Config LoadConfig()
@@ -606,13 +748,30 @@ namespace CS2RankingPlugin
         public int Prestige { get; set; }
         public string ScoreboardTag { get; set; }
         public string ChatColor { get; set; }
+        public int TotalKills { get; set; }
+        public int TotalDeaths { get; set; }
+        public int TotalAssists { get; set; }
+        public int TotalRoundsWon { get; set; }
+        public int TotalRoundsLost { get; set; }
+        public int TotalMvps { get; set; }
+        public int TotalBombsPlanted { get; set; }
+        public int TotalBombsDefused { get; set; }
+
         public PlayerData()
         {
             XP = 0;
             Level = 1;
             Prestige = 0;
-            ScoreboardTag = "";
-            ChatColor = "";
+            ScoreboardTag = "Rookie";
+            ChatColor = "White";
+            TotalKills = 0;
+            TotalDeaths = 0;
+            TotalAssists = 0;
+            TotalRoundsWon = 0;
+            TotalRoundsLost = 0;
+            TotalMvps = 0;
+            TotalBombsPlanted = 0;
+            TotalBombsDefused = 0;
         }
     }
 } 

@@ -1,0 +1,2 @@
+GRANT ALL PRIVILEGES ON cs2_ranking.* TO 'rkb'@'%';
+FLUSH PRIVILEGES; 

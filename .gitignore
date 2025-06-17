@@ -88,4 +88,7 @@ obj/
 *.suo
 *.cache
 *.dll
-*.pdb 
+*.pdb
+
+# Ignore config file with sensitive credentials
+config.json 

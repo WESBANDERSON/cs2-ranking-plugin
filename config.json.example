@@ -3,5 +3,33 @@
   "DatabasePort": 3306,
   "DatabaseName": "rkb_vanity",
   "DatabaseUser": "rkb",
-  "DatabasePassword": "dD7xPpfyfd"
+  "DatabasePassword": "YOUR_PASSWORD_HERE",
+  "Prefix": "[ {BLUE}Ranks {DEFAULT}]",
+  "UseCommandWithoutPrefix": true,
+  "ShowExperienceMessages": true,
+  "MinPlayers": 4,
+  "InitialExperiencePoints": 1000,
+  "XpSettings": {
+    "EventRoundMvp": 12,
+    "EventPlayerDeath": {
+      "Kills": 13,
+      "Deaths": 20,
+      "Assists": 5,
+      "KillingAnAlly": 6
+    },
+    "EventPlayerBomb": {
+      "DroppedBomb": 5,
+      "PlantedBomb": 3,
+      "DefusedBomb": 3,
+      "PickUpBomb": 3
+    },
+    "EventRoundEnd": {
+      "Winner": 5,
+      "Loser": 8
+    },
+    "Weapons": {
+      "knife": 5,
+      "awp": 2
+    }
+  }
 } 
