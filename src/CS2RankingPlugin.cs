@@ -26,7 +26,7 @@ namespace CS2RankingPlugin
 
         public override void Load(bool hotReload)
         {
-            _connectionString = "Server=rkb.site.nfoservers.com;Port=3306;Database=cs2_ranking;User=rkb;Password=dD7xPpfyfd;";
+            _connectionString = "Server=rkb.site.nfoservers.com;Port=3306;Database=rkb_vanity;User=rkb;Password=dD7xPpfyfd;";
             _playerData = new Dictionary<ulong, PlayerData>();
 
             // Register commands
