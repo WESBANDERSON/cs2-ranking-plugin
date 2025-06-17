@@ -15,7 +15,7 @@ A vanity-driven ranking system for Counter-Strike 2 servers with in-game cosmeti
 
 - Counter-Strike 2 server
 - .NET 7.0 SDK
-- MySQL database
+- MySQL database (already set up at rkb.site.nfoservers.com)
 
 ## Installation
 
@@ -48,11 +48,11 @@ mkdir -p csgo/addons/cs2-ranking
 Create `csgo/addons/cs2-ranking/config.json` with your database settings:
 ```json
 {
-  "DatabaseHost": "your-database-host",
+  "DatabaseHost": "rkb.site.nfoservers.com",
   "DatabasePort": 3306,
-  "DatabaseName": "your-database-name",
-  "DatabaseUser": "your-database-user",
-  "DatabasePassword": "your-database-password"
+  "DatabaseName": "rkb_vanity",
+  "DatabaseUser": "rkb",
+  "DatabasePassword": "dD7xPpfyfd"
 }
 ```
 
@@ -65,10 +65,12 @@ Create `csgo/addons/cs2-ranking/config.json` with your database settings:
 }
 ```
 
-## Database Setup
+## Database
 
-1. Create a MySQL database
-2. The plugin will automatically create the necessary tables on first run
+The database is already set up at rkb.site.nfoservers.com with:
+- Database name: rkb_vanity
+- Tables: players (with all necessary fields)
+- View: top_players
 
 ## Commands
 

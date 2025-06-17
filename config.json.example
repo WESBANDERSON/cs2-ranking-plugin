@@ -1,7 +1,7 @@
 {
-  "DatabaseHost": "your-database-host",
+  "DatabaseHost": "rkb.site.nfoservers.com",
   "DatabasePort": 3306,
-  "DatabaseName": "your-database-name",
-  "DatabaseUser": "your-database-user",
-  "DatabasePassword": "your-database-password"
+  "DatabaseName": "rkb_vanity",
+  "DatabaseUser": "rkb",
+  "DatabasePassword": "dD7xPpfyfd"
 } 
